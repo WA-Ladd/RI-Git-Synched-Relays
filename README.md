@@ -10,19 +10,36 @@ I know very little coding, by way of trying to make a game and getting tired of 
 
 ## Overview
 
-This project describes a simple relay pattern for passing structured messages between LLM agents using GitHub as a shared mailbox.
+This project describes a simple relay pattern for passing structured messages between LLM agents using GitHub as a shared mailbox, with n8n handling the boring routing work.
 
 The core idea is:
 
 - A message is written as a JSON file.
 - The JSON file has a known sender, recipient, task, and message.
-- A receiving agent can read the file through a GitHub connector.
+- n8n detects new relay files and routes them.
+- A receiving agent can read the relay through a GitHub connector.
 - A response can be written back as another JSON relay.
-- Optional automation can move messages between outbox, inbox, index, and dead-letter folders.
+- n8n moves valid relays to inbox/index locations and sends invalid relays to dead-letter.
 
 The relay format is the important part. The specific model provider is not.
 
 Any LLM that can read and write files in the same GitHub repository can participate.
+
+## Why n8n Matters
+
+The relay pattern can be tested manually, but it is much less convenient without automation.
+
+Without n8n, the human still has to:
+
+- notice that a new relay exists;
+- copy or move it to the correct inbox;
+- update the recipient index;
+- handle invalid recipients;
+- repeat the process for responses.
+
+With n8n, the human can mostly stay out of the middle. n8n can watch the repo, read relay files, route them, update indexes, and send bad relays to dead-letter.
+
+A manual relay is good for understanding the pattern. An n8n workflow is what makes the pattern useful day to day.
 
 ## What This Is
 
@@ -33,7 +50,8 @@ It is useful when:
 - you want two AI agents to pass tasks between each other;
 - you do not want to manually copy and paste every relay;
 - you want a visible record of what was sent;
-- you want a simple Git-based structure instead of a full orchestration platform.
+- you want a simple Git-based structure instead of a full orchestration platform;
+- you want n8n or a similar workflow tool to handle routing.
 
 ## What This Is Not
 
@@ -161,15 +179,21 @@ Example:
 ```text
 Agent A writes relay/outbox/000120261380001.json
         ↓
-Router or human moves/copies it to relay/inbox/
+n8n detects the outbox file
         ↓
-relay/index/01.json is updated
+n8n checks the relay JSON
+        ↓
+n8n writes/copies it to relay/inbox/
+        ↓
+n8n updates relay/index/01.json
         ↓
 Agent B reads relay/index/01.json
         ↓
 Agent B opens the listed relay file
         ↓
-Agent B writes a response relay back to Agent A
+Agent B writes a response relay back to relay/outbox/
+        ↓
+n8n routes the response back to Agent A
 ```
 
 ## Index Files
@@ -271,6 +295,57 @@ At minimum:
 
 For early testing, this can be done manually through GitHub's web editor.
 
+## Bare-Bones n8n Setup
+
+n8n is the practical router.
+
+A minimal n8n workflow needs these parts:
+
+1. **Trigger**
+   - GitHub webhook, scheduled poll, or manual test trigger.
+   - Detect new or changed files in `relay/outbox/`.
+
+2. **Fetch Relay File**
+   - Read the JSON file from GitHub.
+
+3. **Parse Relay JSON**
+   - Confirm the relay is valid JSON.
+   - Confirm required fields exist: `relay_id`, `from`, `to`, `task`, `message`, `timestamp`, `status`.
+
+4. **Route by Recipient**
+   - If `to` is `00`, route to Agent A inbox.
+   - If `to` is `01`, route to Agent B inbox.
+   - If `to` is unknown, route to dead-letter.
+
+5. **Write Inbox File**
+   - Create `relay/inbox/{relay_id}.json`.
+
+6. **Update Recipient Index**
+   - Open `relay/index/{to}.json`.
+   - Add `{relay_id}.json` to `pending` if it is not already present.
+   - Save the index back to GitHub.
+
+7. **Dead Letter Path**
+   - If the recipient is invalid or required fields are missing, write a record to `relay/dead-letter/`.
+
+## Minimal n8n Router Logic
+
+The workflow logic is basically:
+
+```text
+new file appears in relay/outbox/
+        ↓
+read file
+        ↓
+parse JSON
+        ↓
+if to is valid:
+    write relay/inbox/{relay_id}.json
+    update relay/index/{to}.json
+else:
+    write relay/dead-letter/{relay_id or timestamp}.json
+```
+
 ## Two-Agent Test
 
 ### Step 1 — Agent A Creates a Relay
@@ -298,21 +373,16 @@ Content:
 }
 ```
 
-### Step 2 — Route It Manually
+### Step 2 — Let n8n Route It
 
-Copy the file into:
+n8n should create or update:
 
 ```text
 relay/inbox/000120261380001.json
-```
-
-Then update:
-
-```text
 relay/index/01.json
 ```
 
-to:
+The index should contain:
 
 ```json
 {
@@ -359,21 +429,16 @@ Content:
 }
 ```
 
-### Step 5 — Route the Response Back
+### Step 5 — Let n8n Route the Response Back
 
-Copy it to:
+n8n should create or update:
 
 ```text
 relay/inbox/010020261380002.json
-```
-
-Update:
-
-```text
 relay/index/00.json
 ```
 
-to:
+`relay/index/00.json` should contain:
 
 ```json
 {
@@ -387,43 +452,13 @@ to:
 
 Now Agent A can read the response.
 
-## Optional Router Automation
+## Manual Testing Without n8n
 
-After the manual test works, the routing step can be automated.
+Manual testing is still useful for learning the structure.
 
-A simple router can:
+Without n8n, you can simulate routing by copying the relay file from `relay/outbox/` to `relay/inbox/`, then editing the recipient index by hand.
 
-1. Watch for new files in `relay/outbox/`
-2. Read the JSON
-3. Check the `to` field
-4. Copy the relay to `relay/inbox/`
-5. Update `relay/index/{to}.json`
-6. Send invalid relays to `relay/dead-letter/`
-
-This can be done with:
-
-- n8n
-- GitHub Actions
-- a local Python script
-- a small web server
-- another automation tool
-
-## Minimal Router Pseudocode
-
-```text
-for each new relay in relay/outbox:
-    read JSON
-
-    if relay.to is not a known recipient:
-        write/copy relay to relay/dead-letter
-        stop
-
-    write/copy relay to relay/inbox/{relay_id}.json
-
-    open relay/index/{to}.json
-    append {relay_id}.json to pending
-    save relay/index/{to}.json
-```
+That proves the relay format works, but it is not the recommended long-term workflow.
 
 ## Cleanup
 
@@ -481,14 +516,14 @@ This pattern can be expanded later with:
 - human approval gates;
 - local-only routing;
 - GitHub Actions;
-- n8n workflows;
+- richer n8n workflows;
 - multiple model providers;
 - archive workflows.
 
 The minimal idea remains:
 
 ```text
-structured JSON relays + shared GitHub mailbox + predictable index files
+structured JSON relays + shared GitHub mailbox + n8n routing + predictable index files
 ```
 
 ## License
