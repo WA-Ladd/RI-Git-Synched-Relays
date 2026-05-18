@@ -4,7 +4,7 @@
 
 ## Foreword
 
-I know very little coding, by way of trying to make a game and getting tired of copy and paste I decided to see what there was for a work around. Maybe there was one and I didn't know what to look it up as, but as far as I could tell this didn't exist already, or nobody thought to use it this way. I used ChatGPT and Claude alternatively to build it. My setup also has API agents who are called on for tasks like code and logic verification. This was my work around, I didn't code it, I directed its building. So there very likely are tweaks that can improve it. I hope this helps someone create something amazing, or something that makes them feel amazing for having accomplished something.
+I know very little coding, by way of trying to make a game and getting tired of copy and pasting relays between numerous agents I decided to see what there was for a work around. Maybe there was one already and I didn't know what to look it up as, but as far as I could tell this didn't exist already, or nobody thought to use it this way. I used ChatGPT and Claude alternatively to build it. This was my work around, I didn't code it, I directed its building. So there very likely are tweaks that can improve it. I hope this helps someone create something amazing, or something that makes them feel amazing for having accomplished something. Everything that follows was CGPT written.
 
 — WA-Ladd
 
