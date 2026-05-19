@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RI-Git-Synched-Relays Network Helper</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #1f2937; }
+    main { max-width: 920px; margin: 0 auto; padding: 24px; }
+    section { background: white; border: 1px solid #d1d5db; border-radius: 12px; padding: 20px; margin: 18px 0; }
+    h1, h2 { margin-top: 0; }
+    label { display: block; font-weight: 700; margin-top: 12px; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: 10px; margin-top: 6px; border: 1px solid #9ca3af; border-radius: 8px; font: inherit; }
+    textarea { min-height: 110px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    pre { background: #111827; color: #f9fafb; padding: 14px; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; }
+    button { margin-top: 10px; padding: 9px 12px; border: 0; border-radius: 8px; background: #2563eb; color: white; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #4b5563; }
+    .warning { border-left: 5px solid #f59e0b; }
+    .ok { border-left: 5px solid #10b981; }
+    .small { font-size: 0.95rem; color: #4b5563; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>RI-Git-Synched-Relays Network Helper</h1>
+  <p>This helper walks you through building a basic two-agent relay network using GitHub and n8n.</p>
+
+  <section class="warning">
+    <h2>Privacy Notice</h2>
+    <p>This helper does not intentionally store or transmit any information. It runs locally in your browser and does not use cookies, local storage, analytics, or a server connection. Visible fields clear when you refresh or leave the page.</p>
+    <p>This helper was created to walk users through building a basic two-agent relay network using GitHub and n8n. It does not automate installation, create accounts, connect to GitHub, connect to n8n, validate tokens, or send data anywhere.</p>
+    <p>You remain responsible for where you paste your PAT. Store your PAT only in your own n8n credential field.</p>
+  </section>
+
+  <section>
+    <h2>1. Fill In Your Repo Info</h2>
+    <label for="owner">GitHub username or organization</label>
+    <input id="owner" placeholder="example: WA-Ladd">
+
+    <label for="repo">Repository name</label>
+    <input id="repo" value="RI-Git-Synched-Relays">
+
+    <label for="branch">Branch</label>
+    <input id="branch" value="main">
+  </section>
+
+  <section>
+    <h2>2. Format Your n8n Credential</h2>
+    <p class="small">Paste your PAT here only long enough to copy the formatted value into n8n.</p>
+    <label for="pat">GitHub PAT</label>
+    <input id="pat" type="password" placeholder="paste token temporarily">
+    <button onclick="clearPat()" class="secondary">Clear PAT Field</button>
+
+    <label>n8n Header Name</label>
+    <pre>Authorization</pre>
+
+    <label>n8n Header Value</label>
+    <textarea id="headerValue" readonly>Bearer YOUR_GITHUB_PAT</textarea>
+    <button onclick="copyText('headerValue')">Copy Header Value</button>
+  </section>
+
+  <section>
+    <h2>3. Import This n8n Workflow</h2>
+    <pre>n8n/basic-relay-router-webhook.configured.json</pre>
+    <p>If you have not run the setup wizard yet, use:</p>
+    <pre>./setup/setup.sh</pre>
+    <p>Windows:</p>
+    <pre>setup\setup.bat</pre>
+  </section>
+
+  <section>
+    <h2>4. GitHub Webhook Settings</h2>
+    <label for="webhookUrl">n8n production webhook URL</label>
+    <input id="webhookUrl" placeholder="paste n8n production webhook URL">
+
+    <label>Payload URL</label>
+    <textarea id="payloadUrl" readonly></textarea>
+    <button onclick="copyText('payloadUrl')">Copy Payload URL</button>
+
+    <label>Content type</label>
+    <pre>application/json</pre>
+
+    <label>Events</label>
+    <pre>Just the push event</pre>
+  </section>
+
+  <section>
+    <h2>5. Agent A Prompt</h2>
+    <textarea id="agentA" readonly></textarea>
+    <button onclick="copyText('agentA')">Copy Agent A Prompt</button>
+  </section>
+
+  <section>
+    <h2>6. Agent B Prompt</h2>
+    <textarea id="agentB" readonly></textarea>
+    <button onclick="copyText('agentB')">Copy Agent B Prompt</button>
+  </section>
+
+  <section>
+    <h2>7. Smoke Test Relay</h2>
+    <p>Create this file in GitHub:</p>
+    <pre>relay/outbox/000120261380001.json</pre>
+    <textarea id="smokeTest" readonly></textarea>
+    <button onclick="copyText('smokeTest')">Copy Smoke Test JSON</button>
+  </section>
+
+  <section class="ok">
+    <h2>Done When</h2>
+    <p>The first loop works:</p>
+    <pre>Agent A → GitHub → n8n → Agent B → GitHub → n8n → Agent A</pre>
+  </section>
+</main>
+
+<script>
+  const pat = document.getElementById('pat');
+  const headerValue = document.getElementById('headerValue');
+  const webhookUrl = document.getElementById('webhookUrl');
+  const payloadUrl = document.getElementById('payloadUrl');
+
+  function updateOutputs() {
+    const token = pat.value.trim();
+    headerValue.value = token ? `Bearer ${token}` : 'Bearer YOUR_GITHUB_PAT';
+    payloadUrl.value = webhookUrl.value.trim();
+
+    document.getElementById('agentA').value = `You are Agent A.\nYour relay ID is 00.\n\nRepository behavior:\n- Read pending relay filenames from relay/index/00.json.\n- Read relay files from relay/inbox/.\n- Write outgoing relay files to relay/outbox/.\n- Use valid relay JSON.\n- Do not edit another agent's index directly.\n- Do not delete relay files.\n- Do not modify relay/inbox directly.\n- Do not modify relay/dead-letter directly.\n\nWhen asked to check your inbox:\n1. Read relay/index/00.json.\n2. Open each pending relay listed there from relay/inbox/.\n3. Respond only if a response is needed.\n4. Write the response as a new JSON file in relay/outbox/.`;
+
+    document.getElementById('agentB').value = `You are Agent B.\nYour relay ID is 01.\n\nRepository behavior:\n- Read pending relay filenames from relay/index/01.json.\n- Read relay files from relay/inbox/.\n- Write outgoing relay files to relay/outbox/.\n- Use valid relay JSON.\n- Do not edit another agent's index directly.\n- Do not delete relay files.\n- Do not modify relay/inbox directly.\n- Do not modify relay/dead-letter directly.\n\nWhen asked to check your inbox:\n1. Read relay/index/01.json.\n2. Open each pending relay listed there from relay/inbox/.\n3. Respond only if a response is needed.\n4. Write the response as a new JSON file in relay/outbox/.`;
+
+    document.getElementById('smokeTest').value = JSON.stringify({
+      relay_id: '000120261380001',
+      type: 'relay',
+      from: '00',
+      to: '01',
+      task: 'Smoke test',
+      message: 'Confirm receipt only.',
+      context: null,
+      history: null,
+      timestamp: new Date().toISOString(),
+      status: 'pending'
+    }, null, 2);
+  }
+
+  function clearPat() {
+    pat.value = '';
+    updateOutputs();
+  }
+
+  async function copyText(id) {
+    const el = document.getElementById(id);
+    await navigator.clipboard.writeText(el.value || el.textContent || '');
+  }
+
+  pat.addEventListener('input', updateOutputs);
+  webhookUrl.addEventListener('input', updateOutputs);
+  window.addEventListener('beforeunload', clearPat);
+  updateOutputs();
+</script>
+</body>
+</html>
