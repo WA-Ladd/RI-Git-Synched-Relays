@@ -1,145 +1,124 @@
 # Quick Start
 
-This guide walks through the simplest two-agent setup.
+Use this page to get the two-agent relay working.
 
-Use this guide if you want to deploy the relay without first learning the full framework.
+Do one box at a time.
 
-## Goal
+Do not add more agents yet.
 
-Set up this loop:
+---
 
-```text
-Agent A writes a relay
-        ↓
-GitHub sends a webhook to n8n
-        ↓
-n8n routes it
-        ↓
-Agent B reads it
-        ↓
-Agent B writes a response
-        ↓
-GitHub sends a webhook to n8n
-        ↓
-n8n routes the response back to Agent A
-```
+## What You Need
 
-## Requirements
+- GitHub account
+- This repo copied or forked
+- n8n installed or hosted
+- GitHub PAT/token
+- Two LLM agents that can read/write GitHub files
 
-You need:
+If the agent cannot access GitHub files, it cannot use this relay directly.
 
-- a GitHub account;
-- this repository copied, forked, or used as a template;
-- n8n installed or hosted;
-- a GitHub Personal Access Token, also called a PAT;
-- two LLM agents/chats that can read and write files in the GitHub repository through a GitHub connector or another read/write bridge.
+---
 
-If an agent cannot access GitHub files, it cannot participate directly in this relay.
+## 1. Import the n8n Workflow
 
-## Step 1: Confirm the Repo Structure
-
-Your repo should contain:
-
-```text
-relay/
-├── outbox/
-├── inbox/
-├── index/
-│   ├── 00.json
-│   └── 01.json
-└── dead-letter/
-```
-
-It should also contain:
-
-```text
-examples/relay-example.json
-n8n/basic-relay-router-webhook.json
-n8n/basic-relay-router-workflow.json
-```
-
-Use `basic-relay-router-webhook.json` for normal setup.
-
-Use `basic-relay-router-workflow.json` only as a manual fallback or troubleshooting workflow.
-
-## Step 2: Create a GitHub PAT
-
-Create a GitHub Personal Access Token that can read and write repository contents.
-
-The token must be able to:
-
-- read repository files;
-- create repository files;
-- update repository files.
-
-Keep the token private. Do not commit it into the repository.
-
-## Step 3: Import the n8n Webhook Workflow
-
-In n8n:
-
-1. Open n8n.
-2. Import a workflow from file.
-3. Select:
+In n8n, import this file:
 
 ```text
 n8n/basic-relay-router-webhook.json
 ```
 
-4. Save the workflow.
-
-## Step 4: Create the n8n GitHub Credential
-
-Create an HTTP Header Auth credential in n8n.
-
-Use:
+Expected result:
 
 ```text
+Workflow appears in n8n.
+```
+
+---
+
+## 2. Add Your GitHub Token to n8n
+
+Create an n8n credential:
+
+```text
+Type: HTTP Header Auth
 Header Name: Authorization
 Header Value: Bearer YOUR_GITHUB_PAT
 ```
 
-Replace `YOUR_GITHUB_PAT` with your actual token.
+Do not put the PAT in GitHub files.
 
-## Step 5: Configure the Repo Values
+Expected result:
 
-Open the n8n node named:
+```text
+n8n has a saved GitHub credential.
+```
+
+---
+
+## 3. Set Your Repo Name
+
+Open this n8n node:
 
 ```text
 Filter Outbox Files
 ```
 
-In that node, set:
+Set these values:
 
 ```text
 owner = your GitHub username
-repo = your repository name
+repo = your repo name
 branch = main
 ```
 
-## Step 6: Attach the Credential
+Expected result:
 
-Attach your GitHub PAT credential to each GitHub HTTP Request node:
+```text
+n8n knows which repo to watch.
+```
 
-- Fetch Relay File
-- Write Inbox
-- Get Index
-- Write Index
-- Write Dead Letter
+---
 
-Save the workflow.
+## 4. Attach the GitHub Credential
 
-## Step 7: Activate the n8n Workflow
+Attach your GitHub credential to these n8n nodes:
 
-Activate the workflow in n8n.
+```text
+Fetch Relay File
+Write Inbox
+Get Index
+Write Index
+Write Dead Letter
+```
 
-Open the webhook node and copy the production webhook URL.
+Expected result:
 
-You will paste this URL into GitHub in the next step.
+```text
+All GitHub request nodes have credentials.
+```
 
-## Step 8: Add the GitHub Webhook
+---
 
-In GitHub, open your relay repository.
+## 5. Turn On the Workflow
+
+Activate the n8n workflow.
+
+Open the webhook node.
+
+Copy the production webhook URL.
+
+Expected result:
+
+```text
+You have a webhook URL copied from n8n.
+```
+
+---
+
+## 6. Add the Webhook to GitHub
+
+In GitHub, open your repo.
 
 Go to:
 
@@ -150,44 +129,72 @@ Settings → Webhooks → Add webhook
 Use:
 
 ```text
-Payload URL: paste your n8n production webhook URL
+Payload URL: paste the n8n webhook URL
 Content type: application/json
 Secret: leave blank for first setup
 Events: Just the push event
 Active: checked
 ```
 
-Save the webhook.
+Save it.
 
-## Step 9: Give Agent A Its Prompt
+Expected result:
 
-Use the Agent A prompt in:
+```text
+GitHub now calls n8n when the repo changes.
+```
+
+---
+
+## 7. Give Agent A Its Prompt
+
+Open:
 
 ```text
 docs/AGENT_PROMPTS.md
 ```
 
-Agent A uses relay ID:
+Copy the Agent A prompt into Agent A.
+
+Agent A is:
 
 ```text
 00
 ```
 
-## Step 10: Give Agent B Its Prompt
+Expected result:
 
-Use the Agent B prompt in:
+```text
+Agent A knows how to use relay/index/00.json.
+```
+
+---
+
+## 8. Give Agent B Its Prompt
+
+Open:
 
 ```text
 docs/AGENT_PROMPTS.md
 ```
 
-Agent B uses relay ID:
+Copy the Agent B prompt into Agent B.
+
+Agent B is:
 
 ```text
 01
 ```
 
-## Step 11: Send a Test Relay
+Expected result:
+
+```text
+Agent B knows how to use relay/index/01.json.
+```
+
+---
+
+## 9. Send the Test Relay
 
 Create this file in GitHub:
 
@@ -195,7 +202,7 @@ Create this file in GitHub:
 relay/outbox/000120261380001.json
 ```
 
-Use this content:
+Paste this into it:
 
 ```json
 {
@@ -212,19 +219,25 @@ Use this content:
 }
 ```
 
-Committing this file should trigger the GitHub webhook automatically.
-
-## Step 12: Check the Result
+Commit the file.
 
 Expected result:
+
+```text
+GitHub triggers n8n automatically.
+```
+
+---
+
+## 10. Check Agent B's Inbox
+
+Look for this file:
 
 ```text
 relay/inbox/000120261380001.json
 ```
 
-should exist.
-
-Also check:
+Then check:
 
 ```text
 relay/index/01.json
@@ -236,45 +249,68 @@ It should list:
 000120261380001.json
 ```
 
-## Step 13: Ask Agent B to Check Its Inbox
+Expected result:
 
-Ask Agent B:
+```text
+Agent B has mail.
+```
+
+---
+
+## 11. Ask Agent B to Respond
+
+Tell Agent B:
 
 ```text
 Check relay/index/01.json, read any pending relay files from relay/inbox/, and respond if needed by writing a new relay file to relay/outbox/.
 ```
 
-## Step 14: Route the Response
-
-If Agent B writes a response into `relay/outbox/`, GitHub should trigger n8n again.
-
 Expected result:
+
+```text
+Agent B writes a response relay into relay/outbox/.
+```
+
+---
+
+## 12. Check Agent A's Inbox
+
+After Agent B writes its response, GitHub should trigger n8n again.
+
+Check:
 
 ```text
 relay/index/00.json
 ```
 
-should contain Agent B's response relay filename.
+Expected result:
 
-## Success Criteria
+```text
+Agent A has Agent B's response.
+```
 
-The setup works if:
+---
 
-- Agent A can send a relay to Agent B;
-- GitHub triggers n8n automatically;
-- n8n routes it to Agent B's index;
-- Agent B can read it;
-- Agent B can write a response;
-- n8n routes the response back to Agent A.
+## Done
 
-Do not add more agents until this two-agent loop works.
+The relay works if:
 
-## Manual Fallback
+```text
+Agent A → Agent B → Agent A
+```
 
-If webhook setup fails, import this workflow instead:
+works through GitHub and n8n.
+
+Stop here until the two-agent loop is stable.
+
+---
+
+## If It Fails
+
+Use the manual fallback workflow only for troubleshooting:
 
 ```text
 n8n/basic-relay-router-workflow.json
 ```
 
-That version can be run manually from inside n8n while troubleshooting.
+Do not add more agents until the basic loop works.
