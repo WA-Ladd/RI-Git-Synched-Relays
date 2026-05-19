@@ -1,0 +1,220 @@
+{
+  "name": "RI Git-Synched Relays - Webhook Router",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ri-git-synched-relays",
+        "options": {}
+      },
+      "id": "github-webhook",
+      "name": "GitHub Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [260, 300],
+      "webhookId": "ri-git-synched-relays"
+    },
+    {
+      "parameters": {
+        "jsCode": "const owner = 'YOUR_GITHUB_USERNAME';\nconst repo = 'RI-Git-Synched-Relays';\nconst branch = 'main';\n\nconst body = $json.body || $json;\nconst files = [];\n\nfor (const commit of body.commits || []) {\n  for (const file of [...(commit.added || []), ...(commit.modified || [])]) {\n    if (file.startsWith('relay/outbox/') && file.endsWith('.json') && !files.includes(file)) {\n      files.push(file);\n    }\n  }\n}\n\nreturn files.map(file_path => ({ json: { owner, repo, branch, file_path } }));"
+      },
+      "id": "filter-outbox-files",
+      "name": "Filter Outbox Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{$json.owner}}/{{$json.repo}}/contents/{{$json.file_path}}?ref={{$json.branch}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept", "value": "application/vnd.github+json" },
+            { "name": "X-GitHub-Api-Version", "value": "2022-11-28" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-relay-file",
+      "name": "Fetch Relay File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [780, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "GitHub PAT Header"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Filter Outbox Files').first().json;\nconst decoded = Buffer.from(String($json.content || '').replace(/\\n/g, ''), 'base64').toString('utf8');\nlet relay;\ntry {\n  relay = JSON.parse(decoded);\n} catch (error) {\n  relay = { relay_id: Date.now().toString(), error: 'invalid_json', raw: decoded };\n}\n\nconst required = ['relay_id','from','to','task','message','timestamp','status'];\nconst missing = required.filter(k => relay[k] === undefined || relay[k] === null || relay[k] === '');\nconst validRecipients = ['00','01'];\n\nreturn [{ json: { ...config, relay, missing, valid_to: validRecipients.includes(String(relay.to)) } }];"
+      },
+      "id": "parse-and-validate",
+      "name": "Parse and Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "id": "valid-route", "leftValue": "={{$json.valid_to && $json.missing.length === 0}}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "valid-relay",
+      "name": "Valid Relay?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.github.com/repos/{{$json.owner}}/{{$json.repo}}/contents/relay/inbox/{{$json.relay.relay_id}}.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept", "value": "application/vnd.github+json" },
+            { "name": "X-GitHub-Api-Version", "value": "2022-11-28" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: 'route relay ' + $json.relay.relay_id + ' to inbox', content: Buffer.from(JSON.stringify($json.relay, null, 2) + '\\n').toString('base64'), branch: $json.branch }) }}",
+        "options": {}
+      },
+      "id": "write-inbox",
+      "name": "Write Inbox",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 180],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "GitHub PAT Header"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{$json.owner}}/{{$json.repo}}/contents/relay/index/{{$json.relay.to}}.json?ref={{$json.branch}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept", "value": "application/vnd.github+json" },
+            { "name": "X-GitHub-Api-Version", "value": "2022-11-28" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-index",
+      "name": "Get Index",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1820, 180],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "GitHub PAT Header"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const routed = $('Parse and Validate').first().json;\nconst decoded = Buffer.from(String($json.content || '').replace(/\\n/g, ''), 'base64').toString('utf8');\nconst index = JSON.parse(decoded || '{}');\nconst filename = routed.relay.relay_id + '.json';\nconst pending = Array.isArray(index.pending) ? index.pending : [];\nif (!pending.includes(filename)) pending.push(filename);\nconst updatedIndex = { agent: routed.relay.to, pending, updated: new Date().toISOString() };\nreturn [{ json: { ...routed, index_sha: $json.sha, index_path: 'relay/index/' + routed.relay.to + '.json', updated_index: updatedIndex } }];"
+      },
+      "id": "build-index-update",
+      "name": "Build Index Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2080, 180]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.github.com/repos/{{$json.owner}}/{{$json.repo}}/contents/{{$json.index_path}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept", "value": "application/vnd.github+json" },
+            { "name": "X-GitHub-Api-Version", "value": "2022-11-28" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: 'update inbox index ' + $json.relay.to, content: Buffer.from(JSON.stringify($json.updated_index, null, 2) + '\\n').toString('base64'), sha: $json.index_sha, branch: $json.branch }) }}",
+        "options": {}
+      },
+      "id": "write-index",
+      "name": "Write Index",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2340, 180],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "GitHub PAT Header"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.github.com/repos/{{$json.owner}}/{{$json.repo}}/contents/relay/dead-letter/{{$json.relay.relay_id || Date.now()}}.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept", "value": "application/vnd.github+json" },
+            { "name": "X-GitHub-Api-Version", "value": "2022-11-28" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: 'dead-letter relay ' + ($json.relay.relay_id || 'unknown'), content: Buffer.from(JSON.stringify({ error: 'invalid relay', missing: $json.missing, valid_to: $json.valid_to, relay: $json.relay, timestamp: new Date().toISOString() }, null, 2) + '\\n').toString('base64'), branch: $json.branch }) }}",
+        "options": {}
+      },
+      "id": "write-dead-letter",
+      "name": "Write Dead Letter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 460],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "GitHub PAT Header"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "GitHub Webhook": { "main": [[{ "node": "Filter Outbox Files", "type": "main", "index": 0 }]] },
+    "Filter Outbox Files": { "main": [[{ "node": "Fetch Relay File", "type": "main", "index": 0 }]] },
+    "Fetch Relay File": { "main": [[{ "node": "Parse and Validate", "type": "main", "index": 0 }]] },
+    "Parse and Validate": { "main": [[{ "node": "Valid Relay?", "type": "main", "index": 0 }]] },
+    "Valid Relay?": { "main": [[{ "node": "Write Inbox", "type": "main", "index": 0 }], [{ "node": "Write Dead Letter", "type": "main", "index": 0 }]] },
+    "Write Inbox": { "main": [[{ "node": "Get Index", "type": "main", "index": 0 }]] },
+    "Get Index": { "main": [[{ "node": "Build Index Update", "type": "main", "index": 0 }]] },
+    "Build Index Update": { "main": [[{ "node": "Write Index", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "versionId": "basic-relay-router-webhook-v1"
+}
