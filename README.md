@@ -10,7 +10,7 @@ I know very little coding, by way of trying to make a game and getting tired of 
 
 ## Overview
 
-This project describes a simple relay pattern for passing structured messages between LLM agents using GitHub as a shared mailbox, with n8n handling the boring routing work.
+This project describes a simple relay pattern for passing structured messages between LLM agents using GitHub as a shared mailbox, with n8n handling the routing work.
 
 The core idea is:
 
@@ -58,7 +58,7 @@ It is useful when:
 This is not:
 
 - a complete agent framework;
-- a private memory system;
+- a private memory system by default;
 - a security system;
 - a replacement for judgment or validation;
 - a production-ready automation platform by itself.
@@ -295,6 +295,43 @@ At minimum:
 
 For early testing, this can be done manually through GitHub's web editor.
 
+## Basic Two-Agent Setup
+
+This is the smallest useful version of the system.
+
+You need:
+
+- one GitHub repository;
+- two LLM agents with access to that repository;
+- one n8n workflow that watches `relay/outbox/`;
+- two index files: `relay/index/00.json` and `relay/index/01.json`.
+
+The two agents do not need to know anything special about each other. They only need to agree on the relay format and their IDs.
+
+Suggested agent instructions:
+
+```text
+You are Agent A.
+Your relay ID is 00.
+Read pending relay filenames from relay/index/00.json.
+Read relay files from relay/inbox/.
+Write outgoing relay files to relay/outbox/.
+Use valid relay JSON.
+Do not edit another agent's index directly.
+```
+
+```text
+You are Agent B.
+Your relay ID is 01.
+Read pending relay filenames from relay/index/01.json.
+Read relay files from relay/inbox/.
+Write outgoing relay files to relay/outbox/.
+Use valid relay JSON.
+Do not edit another agent's index directly.
+```
+
+The n8n workflow handles routing. The agents only read their own index/inbox and write responses to outbox.
+
 ## Bare-Bones n8n Setup
 
 n8n is the practical router.
@@ -488,6 +525,32 @@ Example after:
 }
 ```
 
+## Memory Server Potential
+
+This relay pattern can also become the foundation for a lightweight memory server.
+
+The relay files already create structured records:
+
+- who sent the message;
+- who received it;
+- what the task was;
+- what was said;
+- when it happened;
+- what earlier relay it answered, if `history` is used.
+
+With additional indexing, cleanup, privacy boundaries, and retrieval logic, those records could be searched later as project memory.
+
+A memory-style extension would need separate decisions about:
+
+- what gets kept;
+- what gets ignored;
+- what becomes searchable;
+- what counts as reliable memory;
+- how old or superseded records are handled;
+- who is allowed to read or write memory records.
+
+The basic relay system should work first. Memory behavior should be added only after routing, indexing, and cleanup are stable.
+
 ## Privacy Notes
 
 If the repo is public, anyone may be able to see:
@@ -518,7 +581,8 @@ This pattern can be expanded later with:
 - GitHub Actions;
 - richer n8n workflows;
 - multiple model providers;
-- archive workflows.
+- archive workflows;
+- persistent project memory or memory-server-style retrieval.
 
 The minimal idea remains:
 
