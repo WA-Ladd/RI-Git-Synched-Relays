@@ -1,0 +1,8 @@
+{
+  "github_owner": "YOUR_GITHUB_USERNAME",
+  "github_repo": "RI-Git-Synched-Relays",
+  "branch": "main",
+  "agent_ids": ["00", "01"],
+  "n8n_workflow_template": "n8n/basic-relay-router-workflow.json",
+  "n8n_workflow_output": "n8n/basic-relay-router-workflow.configured.json"
+}
