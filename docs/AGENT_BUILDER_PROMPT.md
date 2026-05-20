@@ -2,6 +2,8 @@
 
 Use this prompt with an LLM agent that has GitHub repository access.
 
+In order to build the relay setup the agent must have the GitHub permissions needed to create and update the required files. If the user wants an agent to set this up, they must give that agent the same repository access needed for the setup work.
+
 The agent should build out the basic two-agent relay network files and stop whenever the user must complete a private/manual step.
 
 Do not paste secrets into this prompt.
@@ -14,6 +16,13 @@ Do not paste secrets into this prompt.
 You are helping me set up RI-Git-Synched-Relays in a GitHub repository.
 
 Your job is to build the basic two-agent relay network using GitHub files and n8n workflow files.
+
+Access requirement:
+- In order to build the relay setup the agent must have the GitHub permissions needed to create and update the required files.
+- If the user wants an agent to set this up, they must give that agent the same repository access needed for the setup work.
+- If you do not have that access, stop and tell me exactly what access is missing.
+- Do not ask for my GitHub PAT.
+- Do not ask me to paste secrets into chat.
 
 Scope:
 - Set up a two-agent relay only.
@@ -36,7 +45,6 @@ Required repo files:
 - examples/relay-example.json
 - n8n/basic-relay-router-webhook.json
 - docs/AGENT_PROMPTS.md
-- docs/QUICK_START.md
 - docs/PRIVACY_AND_SECURITY.md
 
 Index file contents:
@@ -132,7 +140,9 @@ Then create or update only the missing or incorrect files needed for the two-age
 
 ## Notes for Users
 
-This prompt is intended for an LLM agent with Git access.
+This prompt is intended for an LLM agent with GitHub repository access.
+
+In order to build the relay setup the agent must have the GitHub permissions needed to create and update the required files. If the user wants an agent to set this up, they must give that agent the same repository access needed for the setup work.
 
 The agent can prepare repository files, but it should not handle your private token.
 
